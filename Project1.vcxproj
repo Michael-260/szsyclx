@@ -141,6 +141,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="func.cpp" />
     <ClCompile Include="源.cpp" />
   </ItemGroup>
   <ItemGroup>

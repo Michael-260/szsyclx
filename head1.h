@@ -3,6 +3,10 @@
 #include<iostream>
 #include<fstream>
 using namespace std;
+const static string dataFILENAME = "data.scbapht";//计算数据"dat.txt";
+static string POINTFILE = "bundleadjustment_SCBA_Point_Result.scbapts";//控制点及其像点信息文件
+static string CAMERAFILE = "bundleadjustment_SCBA_Camera_Result.scbacmr";//相机参数文件
+static string PHOTOFILE = "bundleadjustment_SCBA_Photo_Result.scbapht";//左右影像外方位元素
 class mpoint {
 public:
 	int id;
@@ -17,19 +21,6 @@ public:
 	friend ostream& operator<<(ostream&, mpoint&);
 	friend istream& operator>>(istream&, mpoint&);
 };
-ostream& operator<<(ostream& output, mpoint& p) {
-	output << "id:" << p.id << endl
-		<< "(" << p.X << "," << p.Y << "," << p.Z << ")" << endl
-		<< p.lx << "   " << p.ly << "   " << p.rx << "   " << p.ry << endl;
-	return output;
-}
-istream& operator>>(istream& input, mpoint& p) {
-	double tem;
-	input >> p.id >> p.X >> p.Y >> p.Z
-	>> tem>> tem >> tem
-	>> p.lx >> p.ly >> tem >> p.rx >> p.ry;
-	return input;
-}
 class mcamera {
 public:
 	double x0, y0;
@@ -38,11 +29,6 @@ public:
 	double k1, k2, p1, p2, alpha, beta;
 	friend istream& operator>>(istream&, mcamera&);
 };
-istream& operator>>(istream& input, mcamera& p) {
-	input >> p.x0 >> p.y0 >> p.f >> p.ccd >> p.ccd >> p.ccd >> 
-		p.k1 >> p.k2 >> p.p1 >> p.p2 >> p.alpha >> p.beta;
-	return input;
-}
 class mphoto {
 public:
 	double Xs, Ys, Zs, fai, omega, kafa;
@@ -59,11 +45,7 @@ public:
 		p[8] = cos(fai) * cos(omega);
 	}
 };
-istream& operator>>(istream& input, mphoto& p) {
-	double tem;
-	input >> p.Xs >> p.Ys >> p.Zs >> p.fai >> p.omega >> p.kafa >> tem >> tem;
-	return input;
-}
+void rearward();
 void front(mphoto& right, mphoto& left, fstream& file);
 void relative(mphoto& left, mphoto& right, fstream& file);
 void AO();
