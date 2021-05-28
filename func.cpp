@@ -1,6 +1,6 @@
-
 #include "head1.h"
 #include <Eigen/Dense>
+#include<vector>
 using namespace std;
 using namespace Eigen;
 
@@ -27,41 +27,27 @@ istream& operator>>(istream& input, mphoto& p) {
 	input >> p.Xs >> p.Ys >> p.Zs >> p.fai >> p.omega >> p.kafa >> tem >> tem;
 	return input;
 }
-
-/*********************后方交会*********************/
 void rearward() {
 	fstream file;
-	//*********************读取点的坐标*********************
 	//像点信息：X，Y，Z，lx，ly，rx，ry
-	int pointnum = 0, tem = 0;//pointnum 点的总数
+	int pointnum = 0, tem = 0;
 	file.open(POINTFILE, ios::in);
 	file >> pointnum >> tem;
-	//cout << pointnum << "   " << tem << endl;
-	//定义存储点信息的对象数组
 	mpoint* mpt = new mpoint[pointnum], * mpt_tem = mpt;
 	for (int i = 0; i < pointnum; i++) {
 		file >> mpt_tem[i];
 	}
-	/*for (int i = 0; i < pointnum; i++) {
-		cout << mpt_tem[i];
-	}*/
 	file.close();
-
-	//******************读取相机参数******************
 	//相机参数：x0，y0，f，ccd，k1, k2, p1, p2, alpha, beta
 	mcamera mca;
 	file.open(CAMERAFILE, ios::in);
 	file >> tem; file >> mca;
 	file.close();
-
-	//******************读取外方位元素初值******************
 	//外方位元素值：Xs, Ys, Zs, fai, omega, kafa;
 	file.open(PHOTOFILE, ios::in);
 	mphoto left, right;
 	file >> tem; file >> left >> right;
 	file.close();
-
-	//******************数据处理、平差运算******************
 	int mod_code = 1;//首先计算左右影像代码
 	while (mod_code < 3)
 	{
@@ -74,14 +60,14 @@ void rearward() {
 			X0(0, 0) = right.Xs; X0(1, 0) = right.Ys; X0(2, 0) = right.Zs;
 			X0(3, 0) = right.fai; X0(4, 0) = right.omega; X0(5, 0) = right.kafa;
 		}
-		tem = 1;
-		double sigemad = 0;
+		tem = pointnum * 2;
+		double sigemad = 0, * jeb = new double[tem];
 		if (mod_code == 1) { file.open("result_left.txt", ios::out); }
 		if (mod_code == 2) { file.open("result_right.txt", ios::out); }
-
-		while (1)//迭代条件
+		tem = 1;
+		while (1)//迭代
 		{
-			double deltx, delty, xba, yba, zba;
+			double  xba, yba, zba;
 			double MtrRoat[9];
 			mphoto mx0;
 			mx0.Xs = X0(0, 0); mx0.Ys = X0(1, 0); mx0.Zs = X0(2, 0);
@@ -90,22 +76,23 @@ void rearward() {
 			mpt_tem = mpt;
 			MatrixXd L(pointnum * 2, 1);
 			MatrixXd L0(pointnum * 2, 1);
-			MatrixXd MtrA(pointnum * 2, 6);//！！！此处使用动态矩阵，或者用运算符new
+			MatrixXd MtrA(pointnum * 2, 6);//此处使用动态矩阵，或者用运算符new
 			//矩阵赋值
 			for (int i = 0; i < pointnum; i++, mpt_tem++) {
-				double xs = X0(0, 0), ys = X0(1, 0), zs = X0(2, 0);
+				double deltx, delty, xs = X0(0, 0), ys = X0(1, 0), zs = X0(2, 0);
 				xba = MtrRoat[0] * (mpt_tem->X - xs) + MtrRoat[3] * (mpt_tem->Y - ys) + MtrRoat[6] * (mpt_tem->Z - zs);
 				yba = MtrRoat[1] * (mpt_tem->X - xs) + MtrRoat[4] * (mpt_tem->Y - ys) + MtrRoat[7] * (mpt_tem->Z - zs);
 				zba = MtrRoat[2] * (mpt_tem->X - xs) + MtrRoat[5] * (mpt_tem->Y - ys) + MtrRoat[8] * (mpt_tem->Z - zs);
 				int index1 = i * 2, index2 = i * 2 + 1;
 				double x, y;
-				if (mod_code == 1) x = mpt_tem->lx, y = mpt_tem->ly;
-				if (mod_code == 2) x = mpt_tem->rx, y = mpt_tem->ry;
+				if (mod_code == 1) { x = mpt_tem->lx, y = mpt_tem->ly; }
+				if (mod_code == 2) { x = mpt_tem->rx, y = mpt_tem->ry; }
 				double x0 = mca.x0, y0 = mca.y0, f = mca.f,
 					fai = X0(3, 0), omega = X0(4, 0), kafa = X0(5, 0);
 				double k1 = mca.k1, k2 = mca.k2, p1 = mca.p1, p2 = mca.p2, alpha = mca.alpha, beta = mca.beta, r = sqrt((x - x0) * (x - x0) + (y - y0) * (y - y0));
 				deltx = (x - x0) * (k1 * r * r + k2 * r * r * r * r) + p1 * (r * r + 2 * (x - x0) * (x - x0)) + 2 * p2 * (x - x0) * (y - y0) + alpha * (x - x0) + beta * (y - y0);
 				delty = (y - y0) * (k1 * r * r + k2 * r * r * r * r) + p2 * (r * r + 2 * (y - y0) * (y - y0)) + 2 * p1 * (x - x0) * (y - y0);
+				jeb[i * 2] = deltx; jeb[i * 2 + 1] = delty;
 				L0(index1, 0) = x0 + deltx - f * xba / zba;
 				L0(index2, 0) = y0 + delty - f * yba / zba;
 				L(index1, 0) = x - L0(index1, 0);
@@ -136,11 +123,22 @@ void rearward() {
 			file << "sigema:\n" << sigemad << endl;
 			if (mod_code == 1) {
 				cout << "左影像分析：done\n";
-				if (abs(X(0, 0)) < 0.0001 && abs(X(1, 0)) < 0.0001 && abs(X(2, 0)) < 0.0001 && abs(X(3, 0)) < 0.0001 && abs(X(4, 0)) < 0.0001 && abs(X(5, 0)) < 0.0001) { cout << "请查看result_left.txt文件\n"; break; }
+				if (abs(X(0, 0)) < 0.0001 && abs(X(1, 0)) < 0.0001 && abs(X(2, 0)) < 0.0001 && abs(X(3, 0)) < 0.0001 && abs(X(4, 0)) < 0.0001 && abs(X(5, 0)) < 0.0001) { 
+					cout << "请查看result_left.txt文件\n";
+					fstream jebf; jebf.open("ji_l.txt", ios::out);
+					for (int i = 0; i < 2 * pointnum; i++)jebf << jeb[i] << endl; jebf.close();
+					break;
+				}
+
 			}
 			if (mod_code == 2) {
 				cout << "右影像分析：done\n";
-				if (abs(X(0, 0)) < 0.0001 && abs(X(1, 0)) < 0.0001 && abs(X(2, 0)) < 0.0001 && abs(X(3, 0)) < 0.0001 && abs(X(4, 0)) && abs(X(5, 0)) < 0.0001) { cout << "请查看result_right.txt文件\n"; break; }
+				if (abs(X(0, 0)) < 0.0001 && abs(X(1, 0)) < 0.0001 && abs(X(2, 0)) < 0.0001 && abs(X(3, 0)) < 0.0001 && abs(X(4, 0)) && abs(X(5, 0)) < 0.0001) { 
+					cout << "请查看result_right.txt文件\n";
+					fstream jebf; jebf.open("ji_r.txt", ios::out);
+					for (int i = 0; i < 2 * pointnum; i++)jebf << jeb[i] << endl; jebf.close();
+					break; 
+				}
 			}
 		}
 		file.close();
@@ -150,13 +148,21 @@ void rearward() {
 
 /*********************前方交会*********************/
 void front(mphoto& right, mphoto& left, fstream& file) {
-	mpoint pointdat[100]; double temp; int nnum = 100;
-	file.open("bundleadjustment_SCBA_Point_Result.scbapts", ios::in);
-	file >> temp >> temp;
-	for (int i = 0; i < nnum; i++)file >> pointdat[i];//读入100个控制点的数据
-	file.close(); file.open("front_result.txt", ios::out);
+	mpoint pointdat[117];int nnum = 117; double temp; 
+	vector<double> j_l, j_r;
+	mcamera mca;
+	file.open(CAMERAFILE, ios::in);file >> temp; file >> mca;file.close();
+	file.open("bundleadjustment_SCBA_Point_Result.scbapts", ios::in);file >> temp >> temp;for (int i = 0; i < nnum; i++)file >> pointdat[i];//读入100个控制点的数据
+	file.close(); fstream filel, filer; filel.open("ji_l.txt", ios::in); filer.open("ji_r.txt", ios::in);
+	for (int i = 0; i < nnum*2; ++i) {
+		filel >> temp;j_l.push_back(temp);filer >> temp; j_r.push_back(temp);
+	}
+	filel.close(); filer.close();
+	file.open("front_result.txt", ios::out);
 	for (int i = 0; i < nnum; ++i) {
-		double x0 = 0.4321, y0 = 0.1174, f = 40.9349, x1 = pointdat[i].lx - x0, y1 = pointdat[i].ly - y0, x2 = pointdat[i].rx - x0, y2 = pointdat[i].ry - y0;
+		double x0 = 0.4321, y0 = 0.1174, f = 40.9349, 
+			x1 = pointdat[i].lx - x0-j_l.at((size_t)i*2), y1 = pointdat[i].ly - y0-j_l.at((size_t)i*2+1),
+			x2 = pointdat[i].rx - x0 - j_r.at((size_t)i * 2), y2 = pointdat[i].ry - y0 - j_r.at((size_t)i * 2 + 1);
 		double Bu = right.Xs - left.Xs, Bv = right.Ys - left.Ys, Bw = right.Zs - left.Zs;
 		double Rout1[9], Rout2[9]; left.SolveMtrR(Rout1); right.SolveMtrR(Rout2);
 		double leftpho[3], rightpht[3];//u1,v1,w1,u2,v2,w2
@@ -175,13 +181,10 @@ void front(mphoto& right, mphoto& left, fstream& file) {
 		X = left.Xs + N1 * leftpho[0];
 		Y = left.Ys + N1 * leftpho[1];
 		Z = left.Zs + N1 * leftpho[2];
-		/*X = N1 * leftpho[0];
-		Y = N1 * leftpho[1];
-		Z = N1 * leftpho[2];*/
 		file << X << "   " << Y << "   " << Z << endl;
 	}
 	file.close();
-	cout << "请查看front_result.txt结果文件";
+	cout << "请查看front_result.txt结果文件\n";
 }
 /*********************相对定向*********************/
 void relative(mphoto& left, mphoto& right, fstream& file) {
@@ -266,20 +269,16 @@ void AO() {
 		yy += pointdat[i].Y;
 		zz += pointdat[i].Z;
 	}
-	//计算地面摄测系的重心坐标
+	//重心化计算
 	_Xtp = xx / nnum; _Ytp = yy / nnum; _Ztp = zz / nnum;
-	//计算空间辅助坐标系的重心坐标
 	_Xg = _Xg / nnum; _Yg = _Yg / nnum; _Zg = _Zg / nnum;
 	cout << _Xtp << "  " << _Ytp << "  " << _Ztp << "  " << _Xg << "  " << _Yg << "  " << _Zg << "  \n";
-
-	//重心化计算
 	for (int i = 0, j = 0; i < 3 * nnum; ++i) {
 		j = i / 3;
 		if (i % 3 == 0) { grpoint[i] = (rpoint[i] - _Xg); rpoint[i] = pointdat[j].X - _Xtp; }
 		else if (i % 3 == 1) { grpoint[i] = (rpoint[i] - _Yg); rpoint[i] = pointdat[j].Y - _Ytp; }
 		else { grpoint[i] = (rpoint[i] - _Zg); rpoint[i] = pointdat[j].Z - _Ztp; }
 	}
-	//grpoint 辅助重心化坐标  rpoint 物空间重心化坐标
 	//初值计算
 	MatrixXd bA(351, 12), bX(12, 1), bL(351, 1), m_Roat(3, 3);
 	double lambda[3], lam;
@@ -314,17 +313,11 @@ void AO() {
 	for (int i = 0; i < 3; ++i)lambda[i] = sqrt(m_Roat(i, 0) * m_Roat(i, 0) + m_Roat(i, 1) * m_Roat(i, 1) + m_Roat(i, 2) * m_Roat(i, 2));
 	lam = (lambda[0] + lambda[1] + lambda[2]) / 3.0;
 	m_Roat = m_Roat / lam;//m_Roat:改化角度矩阵，lam:改化比例系数
-	//比例尺改化
 	for (int i = 0, j = 0; i < 3 * nnum; ++i) {
 		if (i % 3 == 0) {
 			grpoint[i] = grpoint[i] * lam;
 		}
-
 	}
-	/*for (int i = 0; i < 300; ++i) {
-		cout << grpoint[i] <<"   "<<rpoint[i]<< endl;
-	}*/
-	//grpoint 辅助重心化坐标  rpoint 物空间重心化坐标
 	file.open("absolute_report.txt", ios::out);
 	double fai, omega, kafa, m_Roat1[9], error = 3e-4; MatrixXd A(351, 3), L(351, 1), X(3, 1), x(3, 1); X << 0.0, 0.0, 0.0;
 	while (1) {
@@ -348,8 +341,9 @@ void AO() {
 			if (abs(x(i, 0)) > error)flag = false;
 		}
 		if (flag) {
-			file << "绝对定向参数（ψ，ω，k，λ，deltX，deltY，deltZ）：\n" << X(0, 0) << "  " << X(1, 0) << X(2, 0) << "  "
-				<< lam << "  " << bX(0, 0) << "  " << bX(1, 0) << "  " << bX(2, 0);
+			file << "绝对定向参数（ψ，ω，k，λ，deltX，deltY，deltZ）：\n" << X(0, 0) << "  " << X(1, 0) << "  " << X(2, 0) << "  "
+				<< lam << "  " << bX(0, 0) << "  " << bX(1, 0) << "  " << bX(2, 0)
+				;
 			cout << "请查看absolute_report.txt结果文件\n" << endl;
 			file.close();
 			break;
